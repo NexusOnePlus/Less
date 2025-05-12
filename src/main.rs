@@ -1,0 +1,158 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![allow(rustdoc::missing_crate_level_docs)] // it's an example
+
+use eframe::egui::{self, ViewportCommand};
+use egui::{Color32, ScrollArea, Sense, TextEdit, vec2};
+
+fn main() -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([400.0, 420.0])
+            .with_decorations(false)
+            .with_transparent(true)
+            .with_resizable(true),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Less",
+        options,
+        Box::new(|_cc| Ok(Box::new(MyApp::default()))),
+    )
+}
+
+struct MyApp {
+    _language: String,
+    code: String,
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            _language: "rs".into(),
+            code: "fn main() {\n\
+                    \tprintln!(\"Hello world!\");\n\
+                    }\n"
+            .into(),
+        }
+    }
+}
+
+impl eframe::App for MyApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array()
+    }
+
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let Self { _language, code } = self;
+        custom_window_frame(ctx, "Less", |ui| {
+            ScrollArea::vertical().show(ui, |ui| {
+                ui.add(
+                    TextEdit::multiline(code)
+                        .font(egui::TextStyle::Monospace)
+                        .code_editor()
+                        .desired_rows(10)
+                        .desired_width(f32::INFINITY)
+                        .background_color(Color32::from_rgb(0, 0, 0))
+                        .frame(false),
+                );
+            });
+        });
+    }
+}
+
+fn custom_window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
+    use egui::{CentralPanel, UiBuilder};
+
+    let panel_frame = egui::Frame::new()
+        .fill(Color32::from_rgb(0, 0, 0))
+        .corner_radius(10)
+        .outer_margin(1);
+
+    CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
+        let app_rect = ui.max_rect();
+
+        let title_bar_height = 32.0;
+        let title_bar_rect = {
+            let mut rect = app_rect;
+            rect.max.y = rect.min.y + title_bar_height;
+            rect
+        };
+        title_bar_ui(ui, title_bar_rect, title);
+
+        let content_rect = {
+            let mut rect = app_rect;
+            rect.min.y = title_bar_rect.max.y;
+            rect
+        }
+        .shrink(4.0);
+        let mut content_ui = ui.new_child(UiBuilder::new().max_rect(content_rect));
+        add_contents(&mut content_ui);
+    });
+}
+
+fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: &str) {
+    use egui::{
+        Align2,
+        FontId,
+        Id,
+        PointerButton,
+        Sense,
+        UiBuilder,
+        //vec2
+    };
+
+    let painter = ui.painter();
+
+    let title_bar_response = ui.interact(
+        title_bar_rect,
+        Id::new("title_bar"),
+        Sense::click_and_drag(),
+    );
+
+    painter.text(
+        title_bar_rect.center(),
+        Align2::CENTER_CENTER,
+        title,
+        FontId::proportional(15.0),
+        ui.style().visuals.text_color(),
+    );
+
+    if title_bar_response.double_clicked() {
+        let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
+        ui.ctx()
+            .send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
+    }
+
+    if title_bar_response.drag_started_by(PointerButton::Primary) {
+        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+    }
+
+    ui.scope_builder(
+        UiBuilder::new()
+            .max_rect(title_bar_rect)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.visuals_mut().button_frame = false;
+            ui.add_space(8.0);
+            close_maximize_minimize(ui);
+        },
+    );
+}
+
+// Close Button
+fn close_maximize_minimize(ui: &mut egui::Ui) {
+    let close_response_size = vec2(16.0, 16.0);
+
+    let (rect, response) = ui.allocate_exact_size(close_response_size, Sense::click());
+
+    let painter = ui.painter();
+    painter.circle_filled(rect.center(), 7.0, Color32::RED);
+
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if response.clicked() {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+}
