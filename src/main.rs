@@ -1,8 +1,11 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use eframe::egui::{self, ViewportCommand};
-use egui::{Color32, ScrollArea, Sense, TextEdit, vec2};
+use egui::{vec2, Color32, Margin, ScrollArea, Sense, TextEdit};
+use std::env::args;
+use std::fs::rename;
+use std::path::PathBuf;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -21,14 +24,47 @@ fn main() -> eframe::Result {
 }
 
 struct MyApp {
-    _language: String,
+    file_path: Option<PathBuf>,
+    filename: String,
+    modified: bool,
+    ogcode: String,
+    language: String,
     code: String,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
+        let args: Vec<String> = args().collect();
+        if args.len() > 1 {
+            let file_path = PathBuf::from(&args[1]);
+            if file_path.exists() && file_path.is_file() {
+                if let Ok(content) = std::fs::read_to_string(&file_path) {
+                    return Self {
+                        filename: file_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_else(|| "Untitled")
+                            .to_string(),
+                        language: file_path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "".to_string()),
+                        file_path: Some(file_path),
+                        modified: false,
+                        code: content.clone(),
+                        ogcode: content,
+                    };
+                }
+            }
+        };
+        print!("args: {:?}", args);
         Self {
-            _language: "rs".into(),
+            filename: "Untitled".to_string(),
+            file_path: None,
+            modified: false,
+            ogcode: String::new(),
+            language: "rs".into(),
             code: "fn main() {\n\
                     \tprintln!(\"Hello world!\");\n\
                     }\n"
@@ -43,24 +79,36 @@ impl eframe::App for MyApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let Self { _language, code } = self;
-        custom_window_frame(ctx, "Less", |ui| {
+        // let title = self.file_path
+        //     .as_ref()
+        //     .and_then(|path| path.file_name())
+        //     .and_then(|name| name.to_str())
+        //     .unwrap_or("Untitled");
+
+        custom_window_frame(ctx, &mut self.filename, &mut self.file_path, |ui| {
             ScrollArea::vertical().show(ui, |ui| {
                 ui.add(
-                    TextEdit::multiline(code)
+                    TextEdit::multiline(&mut self.code)
                         .font(egui::TextStyle::Monospace)
                         .code_editor()
                         .desired_rows(10)
                         .desired_width(f32::INFINITY)
                         .background_color(Color32::from_rgb(0, 0, 0))
-                        .frame(false),
+                        .frame(false)
+                        .margin(Margin::symmetric(20, 14)),
                 );
             });
         });
+        self.modified = self.code != self.ogcode;
     }
 }
 
-fn custom_window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOnce(&mut egui::Ui)) {
+fn custom_window_frame(
+    ctx: &egui::Context,
+    title: &mut String,
+    filepath: &mut Option<PathBuf>,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
     use egui::{CentralPanel, UiBuilder};
 
     let panel_frame = egui::Frame::new()
@@ -77,8 +125,7 @@ fn custom_window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOn
             rect.max.y = rect.min.y + title_bar_height;
             rect
         };
-        title_bar_ui(ui, title_bar_rect, title);
-
+        title_bar_ui(ui, title_bar_rect, title, filepath);
         let content_rect = {
             let mut rect = app_rect;
             rect.min.y = title_bar_rect.max.y;
@@ -90,32 +137,66 @@ fn custom_window_frame(ctx: &egui::Context, title: &str, add_contents: impl FnOn
     });
 }
 
-fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: &str) {
+fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: &mut String, filepath: &mut Option<PathBuf>) {
     use egui::{
-        Align2,
+        // Align2,
         FontId,
         Id,
         PointerButton,
         Sense,
         UiBuilder,
+        Rect
         //vec2
     };
 
     let painter = ui.painter();
-
+    let space = painter.layout_no_wrap(title.to_string(),FontId::proportional(15.0), Color32::WHITE);   
+    let text_with = space.size().x + 10.0;
     let title_bar_response = ui.interact(
         title_bar_rect,
         Id::new("title_bar"),
         Sense::click_and_drag(),
     );
 
-    painter.text(
-        title_bar_rect.center(),
-        Align2::CENTER_CENTER,
-        title,
-        FontId::proportional(15.0),
-        ui.style().visuals.text_color(),
-    );
+    // painter.text(
+    //     title_bar_rect.center(),
+    //     Align2::CENTER_CENTER,
+    //     title,
+    //     FontId::proportional(15.0),
+    //     ui.style().visuals.text_color(),
+    // );
+
+
+    let maxwidth: f32 = 200.0;
+    let width = maxwidth.min(text_with);
+    
+    let sizerect = vec2(width, 20.0);
+    let center_pos = title_bar_rect.center() - 0.5 * sizerect; 
+
+    let edit_rect = Rect::from_min_size(center_pos, sizerect);
+
+    ui.allocate_new_ui(UiBuilder::new().max_rect(edit_rect),|ui| {
+        let response = ui.add(
+            TextEdit::singleline(title)
+                .font(FontId::proportional(15.0))
+                .text_color(Color32::WHITE)
+                .horizontal_align(egui::Align::Center)
+                .frame(true),
+        );
+        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if let Some(oldpath) = filepath.take() {
+                if let Some(parent) = oldpath.parent() {
+                    let new_path = parent.join(title);
+                    if let Err(e) = rename(&oldpath, &new_path) {
+                        eprintln!("Error renaming file: {}", e);
+                        *filepath = Some(oldpath);
+                    } else {
+                        *filepath = Some(new_path);
+                    }
+                }
+            }
+        }
+    });
 
     if title_bar_response.double_clicked() {
         let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
