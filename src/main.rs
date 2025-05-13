@@ -2,7 +2,7 @@
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use eframe::egui::{self, ViewportCommand};
-use egui::{vec2, Color32, Margin, ScrollArea, Sense, TextEdit};
+use egui::{Color32, Margin, ScrollArea, Sense, TextEdit, vec2};
 use std::env::args;
 use std::fs::rename;
 use std::path::PathBuf;
@@ -84,21 +84,28 @@ impl eframe::App for MyApp {
         //     .and_then(|path| path.file_name())
         //     .and_then(|name| name.to_str())
         //     .unwrap_or("Untitled");
+        let char_count = self.code.chars().count();
 
-        custom_window_frame(ctx, &mut self.filename, &mut self.file_path, |ui| {
-            ScrollArea::vertical().show(ui, |ui| {
-                ui.add(
-                    TextEdit::multiline(&mut self.code)
-                        .font(egui::TextStyle::Monospace)
-                        .code_editor()
-                        .desired_rows(10)
-                        .desired_width(f32::INFINITY)
-                        .background_color(Color32::from_rgb(0, 0, 0))
-                        .frame(false)
-                        .margin(Margin::symmetric(20, 14)),
-                );
-            });
-        });
+        custom_window_frame(
+            ctx,
+            &mut self.filename,
+            &mut self.file_path,
+            |ui| {
+                ScrollArea::vertical().show(ui, |ui| {
+                    ui.add(
+                        TextEdit::multiline(&mut self.code)
+                            .font(egui::TextStyle::Monospace)
+                            .code_editor()
+                            .desired_rows(10)
+                            .desired_width(f32::INFINITY)
+                            .background_color(Color32::from_rgb(0, 0, 0))
+                            .frame(false)
+                            .margin(Margin::symmetric(20, 14)),
+                    );
+                });
+            },
+            char_count,
+        );
         self.modified = self.code != self.ogcode;
     }
 }
@@ -108,6 +115,7 @@ fn custom_window_frame(
     title: &mut String,
     filepath: &mut Option<PathBuf>,
     add_contents: impl FnOnce(&mut egui::Ui),
+    char_count: usize,
 ) {
     use egui::{CentralPanel, UiBuilder};
 
@@ -125,32 +133,78 @@ fn custom_window_frame(
             rect.max.y = rect.min.y + title_bar_height;
             rect
         };
+
         title_bar_ui(ui, title_bar_rect, title, filepath);
         let content_rect = {
             let mut rect = app_rect;
-            rect.min.y = title_bar_rect.max.y;
+            rect.min.y = title_bar_rect.max.y;  
+            rect.max.y -= title_bar_height;
             rect
         }
         .shrink(4.0);
         let mut content_ui = ui.new_child(UiBuilder::new().max_rect(content_rect));
         add_contents(&mut content_ui);
+        let sub_bar_rect = {
+            let mut rect = app_rect;
+            rect.min.y = rect.max.y - title_bar_height;
+            rect
+        };
+        sub_bar_ui(ui, sub_bar_rect, char_count);
     });
 }
 
-fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: &mut String, filepath: &mut Option<PathBuf>) {
+fn sub_bar_ui(ui: &mut egui::Ui, sub_bar_rect: eframe::epaint::Rect, char_count: usize) {
+    use egui::{Align2, FontId, Id, PointerButton, Sense, UiBuilder};
+    let painter = ui.painter();
+
+    let sub_bar_response = ui.interact(sub_bar_rect, Id::new("sub_bar"), Sense::click_and_drag());
+
+    painter.text(
+        sub_bar_rect.center(),
+        Align2::CENTER_CENTER,
+        char_count.to_string() + " characters",
+        FontId::proportional(15.0),
+        ui.style().visuals.text_color(),
+    );
+
+    if sub_bar_response.drag_started_by(PointerButton::Primary) {
+        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+    }
+
+    ui.scope_builder(
+        UiBuilder::new()
+            .max_rect(sub_bar_rect)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.visuals_mut().button_frame = false;
+            ui.add_space(8.0);
+        },
+    );
+}
+
+fn title_bar_ui(
+    ui: &mut egui::Ui,
+    title_bar_rect: eframe::epaint::Rect,
+    title: &mut String,
+    filepath: &mut Option<PathBuf>,
+) {
     use egui::{
         // Align2,
         FontId,
         Id,
         PointerButton,
+        Rect, //vec2
         Sense,
         UiBuilder,
-        Rect
-        //vec2
     };
 
     let painter = ui.painter();
-    let space = painter.layout_no_wrap(title.to_string(),FontId::proportional(15.0), Color32::WHITE);   
+    let space = painter.layout_no_wrap(
+        title.to_string(),
+        FontId::proportional(15.0),
+        Color32::WHITE,
+    );
     let text_with = space.size().x + 10.0;
     let title_bar_response = ui.interact(
         title_bar_rect,
@@ -166,16 +220,15 @@ fn title_bar_ui(ui: &mut egui::Ui, title_bar_rect: eframe::epaint::Rect, title: 
     //     ui.style().visuals.text_color(),
     // );
 
-
     let maxwidth: f32 = 200.0;
     let width = maxwidth.min(text_with);
-    
+
     let sizerect = vec2(width, 20.0);
-    let center_pos = title_bar_rect.center() - 0.5 * sizerect; 
+    let center_pos = title_bar_rect.center() - 0.5 * sizerect;
 
     let edit_rect = Rect::from_min_size(center_pos, sizerect);
 
-    ui.allocate_new_ui(UiBuilder::new().max_rect(edit_rect),|ui| {
+    ui.allocate_new_ui(UiBuilder::new().max_rect(edit_rect), |ui| {
         let response = ui.add(
             TextEdit::singleline(title)
                 .font(FontId::proportional(15.0))
