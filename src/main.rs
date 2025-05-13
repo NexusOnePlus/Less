@@ -84,15 +84,49 @@ impl eframe::App for MyApp {
         //     .and_then(|path| path.file_name())
         //     .and_then(|name| name.to_str())
         //     .unwrap_or("Untitled");
+        if ctx.input(|i| i.key_down(egui::Key::S) && i.modifiers.ctrl && self.modified) {
+            if let Some(path) = &self.file_path {
+                if std::fs::write(path, &self.code).is_ok() {
+                    self.ogcode = self.code.clone();
+                    self.modified = false;
+                }
+            } else {
+                if let Some(save_path) = rfd::FileDialog::new()
+                    .set_title("Save File")
+                    .set_file_name(&self.filename)
+                    .save_file()
+                {
+                    if std::fs::write(&save_path, &self.code).is_ok() {
+                        self.ogcode = self.code.clone();
+                        self.modified = false;
+                        self.filename = save_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_else(|| "Untitled")
+                            .to_string();
+                        self.language = save_path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "".to_string());
+                        self.file_path = Some(save_path);
+                    } else {
+                        eprintln!("Error saving file");
+                    }
+                }
+            }
+        }
+
         let char_count = self.code.chars().count();
 
         custom_window_frame(
             ctx,
             &mut self.filename,
+            self.modified,
             &mut self.file_path,
             |ui| {
                 ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(
+                    let response = ui.add(
                         TextEdit::multiline(&mut self.code)
                             .font(egui::TextStyle::Monospace)
                             .code_editor()
@@ -102,17 +136,20 @@ impl eframe::App for MyApp {
                             .frame(false)
                             .margin(Margin::symmetric(20, 14)),
                     );
+                    if response.changed() {
+                        self.modified = self.code != self.ogcode;
+                    }
                 });
             },
             char_count,
         );
-        self.modified = self.code != self.ogcode;
     }
 }
 
 fn custom_window_frame(
     ctx: &egui::Context,
     title: &mut String,
+    modified: bool,
     filepath: &mut Option<PathBuf>,
     add_contents: impl FnOnce(&mut egui::Ui),
     char_count: usize,
@@ -134,10 +171,10 @@ fn custom_window_frame(
             rect
         };
 
-        title_bar_ui(ui, title_bar_rect, title, filepath);
+        title_bar_ui(ui, title_bar_rect, title, modified, filepath);
         let content_rect = {
             let mut rect = app_rect;
-            rect.min.y = title_bar_rect.max.y;  
+            rect.min.y = title_bar_rect.max.y;
             rect.max.y -= title_bar_height;
             rect
         }
@@ -187,6 +224,7 @@ fn title_bar_ui(
     ui: &mut egui::Ui,
     title_bar_rect: eframe::epaint::Rect,
     title: &mut String,
+    modified: bool,
     filepath: &mut Option<PathBuf>,
 ) {
     use egui::{
@@ -232,7 +270,11 @@ fn title_bar_ui(
         let response = ui.add(
             TextEdit::singleline(title)
                 .font(FontId::proportional(15.0))
-                .text_color(Color32::WHITE)
+                .text_color(if modified {
+                    Color32::from_rgb(255, 0, 0)
+                } else {
+                    Color32::WHITE
+                })
                 .horizontal_align(egui::Align::Center)
                 .frame(true),
         );
