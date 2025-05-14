@@ -192,6 +192,7 @@ fn custom_window_frame(
     let panel_frame = egui::Frame::new()
         .fill(Color32::from_rgb(0, 0, 0))
         .corner_radius(10)
+        .stroke(egui::Stroke::new(1.0, Color32::from_rgb(68, 76, 86)))
         .outer_margin(1);
 
     CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
