@@ -1,9 +1,9 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
-use eframe::egui::{self, ViewportCommand};
+use eframe::egui::{self, Vec2, ViewportCommand};
 use eframe::icon_data;
-use egui::{Color32, Margin, ScrollArea, Sense, TextEdit, vec2};
+use egui::{Color32, Margin, Pos2, ResizeDirection, ScrollArea, Sense, TextEdit, vec2};
 use std::env::args;
 use std::fs::rename;
 use std::path::PathBuf;
@@ -15,7 +15,10 @@ fn main() -> eframe::Result {
             .with_decorations(false)
             .with_transparent(true)
             .with_resizable(true)
-            .with_icon(icon_data::from_png_bytes(include_bytes!("../assets/IconLess.png")).unwrap_or_default()),
+            .with_icon(
+                icon_data::from_png_bytes(include_bytes!("../assets/IconLess.png"))
+                    .unwrap_or_default(),
+            ),
         ..Default::default()
     };
     eframe::run_native(
@@ -86,6 +89,34 @@ impl eframe::App for MyApp {
         //     .and_then(|path| path.file_name())
         //     .and_then(|name| name.to_str())
         //     .unwrap_or("Untitled");
+
+        if let Some(pointer_pos) = ctx.input(|i| i.pointer.interact_pos()) {
+            let possible_rect: Option<egui::Rect> = Some(ctx.input(|i| i.screen_rect()));
+            if let Some(rect) = possible_rect {
+                let size = rect.size();
+                if let Some(direction) = handle_resize(pointer_pos, size) {
+                    let cursor = match direction {
+                        ResizeDirection::North | ResizeDirection::South => {
+                            egui::CursorIcon::ResizeVertical
+                        }
+                        ResizeDirection::East | ResizeDirection::West => {
+                            egui::CursorIcon::ResizeHorizontal
+                        }
+                        ResizeDirection::NorthEast | ResizeDirection::SouthWest => {
+                            egui::CursorIcon::ResizeNeSw
+                        }
+                        ResizeDirection::NorthWest | ResizeDirection::SouthEast => {
+                            egui::CursorIcon::ResizeNwSe
+                        }
+                    };
+                    ctx.set_cursor_icon(cursor);
+                    if ctx.input(|i| i.pointer.primary_pressed()) {
+                        ctx.send_viewport_cmd(ViewportCommand::BeginResize(direction));
+                    }
+                }
+            }
+        }
+
         if ctx.input(|i| i.key_down(egui::Key::S) && i.modifiers.ctrl && self.modified) {
             if let Some(path) = &self.file_path {
                 if std::fs::write(path, &self.code).is_ok() {
@@ -334,4 +365,40 @@ fn close_maximize_minimize(ui: &mut egui::Ui) {
     if response.clicked() {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
     }
+}
+
+fn handle_resize(pointer: Pos2, window_size: Vec2) -> Option<ResizeDirection> {
+    const BORDER_SIZE: f32 = 6.0;
+    let x = pointer.x;
+    let y = pointer.y;
+    let w = window_size.x;
+    let h = window_size.y;
+
+    let x_dir = if x < BORDER_SIZE {
+        ResizeDirection::West
+    } else if x > w - BORDER_SIZE {
+        ResizeDirection::East
+    } else {
+        ResizeDirection::SouthEast
+    };
+
+    let y_dir = if y < BORDER_SIZE {
+        ResizeDirection::North
+    } else if y > h - BORDER_SIZE {
+        ResizeDirection::South
+    } else {
+        ResizeDirection::SouthEast
+    };
+
+    return match (x_dir, y_dir) {
+        (ResizeDirection::West, ResizeDirection::North) => Some(ResizeDirection::NorthWest),
+        (ResizeDirection::West, ResizeDirection::South) => Some(ResizeDirection::SouthWest),
+        (ResizeDirection::West, _) => Some(ResizeDirection::West),
+        (ResizeDirection::East, ResizeDirection::North) => Some(ResizeDirection::NorthEast),
+        (ResizeDirection::East, ResizeDirection::South) => Some(ResizeDirection::SouthEast),
+        (ResizeDirection::East, _) => Some(ResizeDirection::East),
+        (_, ResizeDirection::North) => Some(ResizeDirection::North),
+        (_, ResizeDirection::South) => Some(ResizeDirection::South),
+        _ => None,
+    };
 }
