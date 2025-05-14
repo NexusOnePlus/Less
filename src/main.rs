@@ -1,7 +1,8 @@
-// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
 use eframe::egui::{self, ViewportCommand};
+use eframe::icon_data;
 use egui::{Color32, Margin, ScrollArea, Sense, TextEdit, vec2};
 use std::env::args;
 use std::fs::rename;
@@ -13,7 +14,8 @@ fn main() -> eframe::Result {
             .with_inner_size([400.0, 420.0])
             .with_decorations(false)
             .with_transparent(true)
-            .with_resizable(true),
+            .with_resizable(true)
+            .with_icon(icon_data::from_png_bytes(include_bytes!("../assets/IconLess.png")).unwrap_or_default()),
         ..Default::default()
     };
     eframe::run_native(
@@ -276,6 +278,7 @@ fn title_bar_ui(
                     Color32::WHITE
                 })
                 .horizontal_align(egui::Align::Center)
+                .background_color(Color32::from_rgb(0, 0, 0))
                 .frame(true),
         );
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
