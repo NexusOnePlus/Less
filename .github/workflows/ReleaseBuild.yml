@@ -1,0 +1,50 @@
+name: Less Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version'
+        required: true
+        default: 'v1.0.0'
+      release_title:
+        description: 'Title Release'
+        required: false
+      release_notes:
+        description: 'Release Notes'
+        required: false
+
+      
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check rustup
+      run: |
+          rustup update stable
+          rustup default stable 
+
+    - name: Build for release
+      run: cargo build --release --verbose
+      env:
+          CARGO_TERM_COLOR: always
+    
+    - name: Run tests
+      run: cargo test --release --verbose
+      env:
+          CARGO_TERM_COLOR: always
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with: 
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.release_title || format('Release {0}', github.event.inputs.version) }}
+          body: |
+            ${{ github.event.inputs.release_notes }}
+          files: target/release/Less.exe
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
