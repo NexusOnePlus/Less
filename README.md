@@ -10,11 +10,11 @@
 ![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)
 ![GitHub Repo stars](https://img.shields.io/github/stars/NexusOnePlus/Less)
 ![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)        
-## Previews
+## Preview
 
 https://github.com/user-attachments/assets/655de062-c9bf-4fd0-b0f1-a15a5d4da46a
 
-## Keyboard Shortcuts and Features
+## Keyboard Shortcut and Features
 
 - **Ctrl+S**: Save File
 - Rename file
@@ -34,4 +34,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Feel free to submit issues or pull requests to improve ResizerKey.
+Feel free to submit issues or pull requests to improve Less.
